@@ -44,5 +44,5 @@ python main.py
 ## Support
 If you find this tool helpful, you can support the development by:
 - Buying me a coffee at https://ko-fi.com/perrypixel
-- UPI payment to kevinp@apl
+- UPI to kevinp@apl
 
