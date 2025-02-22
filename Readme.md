@@ -39,3 +39,10 @@ python main.py
 - Click again or press F2 to stop recording
 - The transcribed text will appear in the window and be typed at your cursor position
 - All transcriptions are logged in transcribe.log
+
+
+## Support
+If you find this tool helpful, you can support the development by:
+- Buying me a coffee at https://ko-fi.com/perrypixel
+- UPI payment to kevinp@apl
+
