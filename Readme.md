@@ -1,10 +1,20 @@
-# Voice Typer Pro
+# VoiceTyper Pro
 
-A graphical interface for the Voice Typer tool using python and the Deepgram API.
+A graphical interface for voice-to-text transcription using Python and the Deepgram API. This application allows you to convert speech to text in real-time and automatically types the transcribed text at your cursor position.
 
-Requirements:
-- Python
-- Deepgram API key
+Alternative to Mac Whisper, Voice Access, and other voice typing tools.
+
+## Features
+- Real-time speech-to-text transcription
+- Automatic text insertion at cursor position
+- Keyboard shortcut support (F2)
+- Transcription logging
+- User-friendly GUI interface
+
+## Requirements
+- Python 3.7 or higher
+- Deepgram API key (get one at https://deepgram.com)
+- Operating System: Windows, macOS, or Linux
 
 ## Setup Instructions
 
