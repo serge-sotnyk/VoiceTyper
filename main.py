@@ -384,8 +384,10 @@ class VoiceTyperApp:
             source = {'buffer': audio, 'mimetype': 'audio/wav'}
             options = {
                 'punctuate': True,
-                'language': 'en',
-                'model': 'general',
+                # 'language': 'en',
+                'detect_language': True,
+                # 'model': 'general',
+                'model': 'nova-3'
             }
             response = await self.deepgram.transcription.prerecorded(source, options)
             return response['results']['channels'][0]['alternatives'][0]['transcript']
