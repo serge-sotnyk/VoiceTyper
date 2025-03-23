@@ -17,15 +17,17 @@ from playsound import playsound
 from pynput import keyboard
 
 # Set theme and color scheme
-ctk.set_appearance_mode("dark")
+ctk.set_appearance_mode("system")
+# ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
+# ctk.set_default_color_theme("dark-blue")
 
 
 class SettingsDialog:
     def __init__(self, parent, callback=None):
         self.dialog = ctk.CTkToplevel(parent)
         self.dialog.title("Settings")
-        self.dialog.geometry("400x320")  # Increased height for new shortcut options
+        self.dialog.geometry("400x340")  # Increased height for new shortcut options
         self.dialog.transient(parent)
         self.dialog.resizable(False, False)
 
@@ -45,14 +47,14 @@ class SettingsDialog:
             text="Deepgram API Key:",
             font=ctk.CTkFont(size=14)
         )
-        self.api_label.pack(anchor="w", pady=5)
+        self.api_label.pack(anchor="w", padx=10, pady=5)
 
         self.api_entry = ctk.CTkEntry(
             self.api_frame,
-            width=300,
+            width=350,
             font=ctk.CTkFont(size=14)
         )
-        self.api_entry.pack(pady=5)
+        self.api_entry.pack(pady=10)
         self.api_entry.insert(0, self.settings.get('api_key', ''))
 
         # Keyboard shortcut options
@@ -64,7 +66,7 @@ class SettingsDialog:
             text="Recording Keyboard Shortcut:",
             font=ctk.CTkFont(size=14)
         )
-        self.shortcut_label.pack(anchor="w", pady=5)
+        self.shortcut_label.pack(anchor="w", padx=10, pady=5)
 
         # Get current shortcut or default to F2
         current_shortcut = self.settings.get('shortcut', 'f2')
@@ -80,7 +82,10 @@ class SettingsDialog:
         # Radio buttons for shortcuts
         self.shortcut_var = ctk.StringVar(value=current_shortcut)
         
-        for key, label in self.shortcuts.items():
+        shortcut_count = len(self.shortcuts)
+        for i, (key, label) in enumerate(self.shortcuts.items()):
+            # Для последнего элемента добавляем больший pady
+            bottom_padding = 10 if i == shortcut_count - 1 else 2
             shortcut_radio = ctk.CTkRadioButton(
                 self.shortcut_frame,
                 text=label,
@@ -88,7 +93,7 @@ class SettingsDialog:
                 value=key,
                 font=ctk.CTkFont(size=12)
             )
-            shortcut_radio.pack(anchor="w", padx=20, pady=2)
+            shortcut_radio.pack(anchor="w", padx=20, pady=(2, bottom_padding))
 
         # Save button
         self.save_btn = ctk.CTkButton(
@@ -131,6 +136,9 @@ class VoiceTyperApp:
         
         # Flag for proper thread termination
         self.running = True
+        
+        # Flag to track if UI has been set up
+        self.ui_initialized = False
 
         # Try to load settings and initialize Deepgram
         try:
@@ -149,7 +157,10 @@ class VoiceTyperApp:
         # Track if log section is expanded
         self.log_expanded = False  # Start with log collapsed
 
-        self.setup_ui()
+        # Setup UI only if not already initialized
+        if not self.ui_initialized:
+            self.setup_ui()
+            
         self.setup_hotkey()  # Set up hotkey after loading settings
         self.start_transcription_thread()
 
@@ -250,6 +261,9 @@ class VoiceTyperApp:
         )
 
     def setup_ui(self):
+        # Mark UI as initialized
+        self.ui_initialized = True
+        
         # Main container with padding
         self.main_frame = ctk.CTkFrame(self.root)
         self.main_frame.pack(fill="both", expand=True, padx=10, pady=10)
