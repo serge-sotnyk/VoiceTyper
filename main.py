@@ -22,20 +22,23 @@ ctk.set_default_color_theme("blue")
 
 
 class SettingsDialog:
-    def __init__(self, parent):
+    def __init__(self, parent, callback=None):
         self.dialog = ctk.CTkToplevel(parent)
         self.dialog.title("Settings")
-        self.dialog.geometry("400x200")
+        self.dialog.geometry("400x320")  # Increased height for new shortcut options
         self.dialog.transient(parent)
         self.dialog.resizable(False, False)
 
-        # Load current API key
+        # Store reference to callback function
+        self.callback = callback
+
+        # Load current settings
         with open('settings.json', 'r') as f:
             self.settings = json.load(f)
 
         # API Key input
         self.api_frame = ctk.CTkFrame(self.dialog)
-        self.api_frame.pack(fill="x", padx=20, pady=20)
+        self.api_frame.pack(fill="x", padx=20, pady=10)
 
         self.api_label = ctk.CTkLabel(
             self.api_frame,
@@ -52,6 +55,41 @@ class SettingsDialog:
         self.api_entry.pack(pady=5)
         self.api_entry.insert(0, self.settings.get('api_key', ''))
 
+        # Keyboard shortcut options
+        self.shortcut_frame = ctk.CTkFrame(self.dialog)
+        self.shortcut_frame.pack(fill="x", padx=20, pady=10)
+
+        self.shortcut_label = ctk.CTkLabel(
+            self.shortcut_frame,
+            text="Recording Keyboard Shortcut:",
+            font=ctk.CTkFont(size=14)
+        )
+        self.shortcut_label.pack(anchor="w", pady=5)
+
+        # Get current shortcut or default to F2
+        current_shortcut = self.settings.get('shortcut', 'f2')
+        
+        # Define available shortcuts
+        self.shortcuts = {
+            'f2': 'F2',
+            'alt+f2': 'Alt+F2',
+            'ctrl+f12': 'Ctrl+F12',
+            'alt+f12': 'Alt+F12'
+        }
+        
+        # Radio buttons for shortcuts
+        self.shortcut_var = ctk.StringVar(value=current_shortcut)
+        
+        for key, label in self.shortcuts.items():
+            shortcut_radio = ctk.CTkRadioButton(
+                self.shortcut_frame,
+                text=label,
+                variable=self.shortcut_var,
+                value=key,
+                font=ctk.CTkFont(size=12)
+            )
+            shortcut_radio.pack(anchor="w", padx=20, pady=2)
+
         # Save button
         self.save_btn = ctk.CTkButton(
             self.dialog,
@@ -59,12 +97,18 @@ class SettingsDialog:
             command=self.save_settings,
             width=100
         )
-        self.save_btn.pack(pady=20)
+        self.save_btn.pack(pady=15)
 
     def save_settings(self):
         self.settings['api_key'] = self.api_entry.get()
+        self.settings['shortcut'] = self.shortcut_var.get()
         with open('settings.json', 'w') as f:
             json.dump(self.settings, f)
+        
+        # Execute callback if provided to update UI
+        if self.callback:
+            self.callback()
+            
         self.dialog.destroy()
 
 
@@ -81,7 +125,10 @@ class VoiceTyperApp:
         self.stop_recording = False
         self.pykeyboard = keyboard.Controller()
         self.recording_animation_active = False
-
+        
+        # Initialize hotkey related variables
+        self.hotkey_listener = None  # Store the hotkey listener
+        
         # Flag for proper thread termination
         self.running = True
 
@@ -102,14 +149,8 @@ class VoiceTyperApp:
         # Track if log section is expanded
         self.log_expanded = False  # Start with log collapsed
 
-        # Global keyboard listener
-        self.keyboard_listener = keyboard.Listener(
-            on_press=self.on_key_press,
-            on_release=self.on_key_release
-        )
-        self.keyboard_listener.start()
-
         self.setup_ui()
+        self.setup_hotkey()  # Set up hotkey after loading settings
         self.start_transcription_thread()
 
         # Add window close event handler
@@ -179,8 +220,15 @@ class VoiceTyperApp:
         try:
             with open('settings.json', 'r') as f:
                 self.settings = json.load(f)
+            # Ensure shortcut is set, default to 'f2' if not
+            if 'shortcut' not in self.settings:
+                self.settings['shortcut'] = 'f2'
+                with open('settings.json', 'w') as f:
+                    json.dump(self.settings, f)
         except FileNotFoundError:
-            self.settings = {'api_key': ''}
+            self.settings = {'api_key': '', 'shortcut': 'f2'}
+            with open('settings.json', 'w') as f:
+                json.dump(self.settings, f)
 
         try:
             self.deepgram = Deepgram(self.settings['api_key'])
@@ -231,9 +279,13 @@ class VoiceTyperApp:
         self.control_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.control_frame.pack(fill="x", pady=10)
 
+        # Get the current shortcut display text
+        shortcut_key = self.settings.get('shortcut', 'f2')
+        shortcut_display = self.get_shortcut_display(shortcut_key)
+        
         self.record_button = ctk.CTkButton(
             self.control_frame,
-            text="Start Recording (F2)",
+            text=f"Start Recording ({shortcut_display})",
             command=self.toggle_recording,
             height=40,
             corner_radius=20
@@ -313,13 +365,17 @@ class VoiceTyperApp:
             self.show_api_key_error()
             return
 
+        # Get the current shortcut display text
+        shortcut_key = self.settings.get('shortcut', 'f2')
+        shortcut_display = self.get_shortcut_display(shortcut_key)
+        
         if not self.is_recording:
             self.start_recording()
             # Start animation with pulsing effect
             self.recording_animation_active = True
             self.record_button.configure(
                 fg_color="#c93434",
-                text="■ Stop Recording (F2)"  # Square stop symbol
+                text=f"■ Stop Recording ({shortcut_display})"
             )
             self.animate_recording()
         else:
@@ -328,19 +384,38 @@ class VoiceTyperApp:
             self.recording_animation_active = False
             self.record_button.configure(
                 fg_color=["#3B8ED0", "#1F6AA5"],
-                text="● Start Recording (F2)"  # Circle record symbol
+                text=f"● Start Recording ({shortcut_display})"
             )
             self.recording_indicator.set(0)
 
-    def on_key_press(self, key):
-        try:
-            if key == keyboard.Key.f2:
-                self.root.after(0, self.toggle_recording)
-        except AttributeError:
-            pass
-
-    def on_key_release(self, key):
-        pass
+    def setup_hotkey(self):
+        """Sets up the hotkey based on current settings."""
+        # If a hotkey listener already exists, stop it
+        if hasattr(self, 'hotkey_listener') and self.hotkey_listener:
+            self.hotkey_listener.stop()
+            
+        # Get configured shortcut
+        shortcut = self.settings.get('shortcut', 'f2')
+        
+        # Map virtual key codes for function keys
+        # F2 = 113, F12 = 123
+        hotkey_map = {}
+        
+        # Define hotkey based on settings
+        if shortcut == 'f2':
+            hotkey_map['<113>'] = self.toggle_recording  # F2 key
+        elif shortcut == 'alt+f2':
+            hotkey_map['<alt>+<113>'] = self.toggle_recording  # Alt + F2
+        elif shortcut == 'ctrl+f12':
+            hotkey_map['<ctrl>+<123>'] = self.toggle_recording  # Ctrl + F12
+        elif shortcut == 'alt+f12':
+            hotkey_map['<alt>+<123>'] = self.toggle_recording  # Alt + F12
+            
+        # Create a new GlobalHotKeys listener
+        self.hotkey_listener = keyboard.GlobalHotKeys(hotkey_map)
+        
+        # Start the listener
+        self.hotkey_listener.start()
 
     def start_recording(self):
         threading.Thread(target=self.record_speech, daemon=True).start()
@@ -441,52 +516,28 @@ class VoiceTyperApp:
                 i += 1
 
     def __del__(self):
-        # Clean up keyboard listener
-        if hasattr(self, 'keyboard_listener'):
-            self.keyboard_listener.stop()
-
-    def animate_window_resize(self, target_height, current_height=None, step=0):
-        total_steps = 15  # Move this outside the if statement
-
-        if current_height is None:
-            current_height = self.root.winfo_height()
-            height_diff = target_height - current_height
-            self.height_step = height_diff / total_steps
-
-        if step < total_steps:
-            new_height = int(current_height + self.height_step)
-            self.root.geometry(f"400x{new_height}")
-            self.root.after(10, lambda: self.animate_window_resize(target_height, new_height, step + 1))
-        else:
-            self.root.geometry(f"400x{target_height}")
-            # Ensure proper packing of log frame after animation
-            if self.log_expanded:
-                self.log_frame.pack(fill="both", expand=True, pady=5)
-            else:
-                self.log_frame.pack_forget()
+        # Clean up hotkey listener
+        if hasattr(self, 'hotkey_listener'):
+            self.hotkey_listener.stop()
 
     def toggle_log_section(self):
-        if not hasattr(self, 'log_expanded'):
-            self.log_expanded = False
-
-        self.log_expanded = not self.log_expanded
-
-        if self.log_expanded:
-            self.toggle_log_btn.configure(
-                text="▼ Hide Log",
-                fg_color="#c93434",
-                hover_color="#a82a2a"
-            )
-            self.log_frame.pack(fill="both", expand=True, pady=5)
-            self.animate_window_resize(600)
+        current_height = self.root.winfo_height()
+        
+        if not self.log_expanded:
+            # Show log section
+            self.log_frame.pack(fill="both", expand=True, padx=5, pady=5)
+            self.toggle_log_btn.configure(text="▼ Hide Log")
+            # Immediately resize window
+            target_height = current_height + 200
+            self.root.geometry(f"400x{target_height}")
+            self.log_expanded = True
         else:
-            self.toggle_log_btn.configure(
-                text="▶ Show Log",
-                fg_color=["#2B2B2B", "#333333"],
-                hover_color=["#333333", "#404040"]
-            )
+            # Hide log section
+            target_height = current_height - 200
+            self.root.geometry(f"400x{target_height}")
             self.log_frame.pack_forget()
-            self.animate_window_resize(250)
+            self.toggle_log_btn.configure(text="▶ Show Log")
+            self.log_expanded = False
 
     def clear_logs(self):
         self.transcription_text.delete('1.0', 'end')
@@ -508,9 +559,9 @@ class VoiceTyperApp:
         # Stop background threads
         self.running = False
 
-        # Stop keyboard listener
-        if hasattr(self, 'keyboard_listener'):
-            self.keyboard_listener.stop()
+        # Stop hotkey listener
+        if hasattr(self, 'hotkey_listener') and self.hotkey_listener:
+            self.hotkey_listener.stop()
 
         # Stop system tray icon
         if hasattr(self, 'tray_icon') and self.tray_icon.visible:
@@ -521,7 +572,40 @@ class VoiceTyperApp:
         self.root.destroy()  # Explicitly destroy the window
 
     def open_settings(self):
-        SettingsDialog(self.root)
+        # Pass the update_ui_on_settings_change callback to refresh UI after settings change
+        SettingsDialog(self.root, callback=self.update_ui_on_settings_change)
+        
+    def update_ui_on_settings_change(self):
+        # Reload settings from file
+        with open('settings.json', 'r') as f:
+            self.settings = json.load(f)
+            
+        # Update button text with current shortcut
+        shortcut_key = self.settings.get('shortcut', 'f2')
+        shortcut_display = self.get_shortcut_display(shortcut_key)
+        
+        # Update button text based on recording state
+        if self.is_recording:
+            self.record_button.configure(
+                text=f"■ Stop Recording ({shortcut_display})"
+            )
+        else:
+            self.record_button.configure(
+                text=f"● Start Recording ({shortcut_display})"
+            )
+            
+        # Update hotkey configuration
+        self.setup_hotkey()
+        
+    def get_shortcut_display(self, shortcut_key):
+        # Get prettier display format for shortcuts
+        shortcuts_display = {
+            'f2': 'F2',
+            'alt+f2': 'Alt+F2',
+            'ctrl+f12': 'Ctrl+F12',
+            'alt+f12': 'Alt+F12'
+        }
+        return shortcuts_display.get(shortcut_key, shortcut_key.upper())
 
     def run(self):
         self.root.mainloop()
